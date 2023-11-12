@@ -17,7 +17,6 @@ from torch.nn.parameter import Parameter
 from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from torchlibrosa.augmentation import SpecAugmentation
 from .pytorch_utils import do_mixup, pad_framewise_output, Interpolator
- 
 
 def init_layer(layer):
     """Initialize a Linear or Convolutional layer. """
@@ -165,12 +164,58 @@ class Cnn14(nn.Module):
         x = F.relu_(self.fc1(x))
         embedding = F.dropout(x, p=0.5, training=self.training)
         clipwise_output = torch.sigmoid(self.fc_audioset(x))
-        
+        #clipwise_output =  torch.log_softmax(self.fc_audioset(x), dim=-1)
         output_dict = {'clipwise_output': clipwise_output, 'embedding': embedding}
 
         return output_dict
+        
+    def load_from_pretrain(self, pretrained_checkpoint_path):
+        #print("")
+        checkpoint = torch.load(pretrained_checkpoint_path)
+        self.load_state_dict(checkpoint['model'])
+        #load_pretrained_params(self, pretrained_checkpoint_path)
 
+class Transfer_Cnn14(nn.Module):
+    def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
+        fmax, classes_num, freeze_base):
+        """Classifier for a new task using pretrained Cnn14 as a sub module.
+        """
+        super(Transfer_Cnn14, self).__init__()
+        audioset_classes_num = 527
+        
+        self.base = Cnn14(sample_rate, window_size, hop_size, mel_bins, fmin, 
+            fmax, audioset_classes_num)
 
+        # Transfer to another task layer
+        self.fc_transfer = nn.Linear(2048, classes_num, bias=True)
+
+        if freeze_base:
+            # Freeze AudioSet pretrained layers
+            for param in self.base.parameters():
+                param.requires_grad = False
+
+        self.init_weights()
+
+    def init_weights(self):
+        init_layer(self.fc_transfer)
+
+    def load_from_pretrain(self, pretrained_checkpoint_path):
+        checkpoint = torch.load(pretrained_checkpoint_path)
+        self.load_state_dict(checkpoint['model'])
+
+    def forward(self, input, mixup_lambda=None):
+        """Input: (batch_size, data_length)
+        """
+        output_dict = self.base(input, mixup_lambda)
+        embedding = output_dict['embedding']
+        #print("embedding size=",embedding.shape)
+
+        clipwise_output =  torch.log_softmax(self.fc_transfer(embedding), dim=-1)
+        #clipwise_output =  torch.sigmoid(self.fc_transfer(embedding))
+        output_dict['clipwise_output'] = clipwise_output
+ 
+        return output_dict
+        
 class Cnn14_DecisionLevelMax(nn.Module):
     def __init__(self, sample_rate, window_size, hop_size, mel_bins, fmin, 
         fmax, classes_num, interpolate_mode='nearest'):

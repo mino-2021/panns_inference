@@ -7,9 +7,8 @@ import torch
 from pathlib import Path
 
 from .pytorch_utils import move_data_to_device
-from .models import Cnn14, Cnn14_DecisionLevelMax
+from .models import Cnn14, Cnn14_DecisionLevelMax, Transfer_Cnn14
 from .config import labels, classes_num
-
 
 def create_folder(fd):
     if not os.path.exists(fd):
@@ -22,6 +21,7 @@ def get_filename(path):
     na = os.path.splitext(na_ext)[0]
     return na
 
+    
 
 class AudioTagging(object):
     def __init__(self, model=None, checkpoint_path=None, device='cuda'):
@@ -46,14 +46,33 @@ class AudioTagging(object):
 
         # Model
         if model is None:
-            self.model = Cnn14(sample_rate=32000, window_size=1024, 
-                hop_size=320, mel_bins=64, fmin=50, fmax=14000, 
-                classes_num=self.classes_num)
+            #print("model is None")
+            #self.model = Cnn14(sample_rate=32000, window_size=1024, 
+            #    hop_size=320, mel_bins=64, fmin=50, fmax=14000, 
+            #    classes_num=self.classes_num)
+            
+            #transfermodel
+            self.model = Transfer_Cnn14(sample_rate=32000, window_size=1024, 
+            hop_size=320, mel_bins=64, fmin=50, fmax=14000, 
+                classes_num=self.classes_num,freeze_base=False)
+
         else:
-            self.model = model
+        	#print("model is not None")
+        	self.model = model
 
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model'])
+        
+
+        #修正--------------------------
+        #model = torch.compile(model) #only available for PyTorch > 2.0
+        print("classes_num=",classes_num)
+        
+        #print([k for k in  checkpoint['model'].keys() ])
+        
+        self.model.load_from_pretrain(checkpoint_path)
+        #self.model.load_state_dict(checkpoint['model'])#修正
+        #--------------------------
+        
 
         # Parallel
         if 'cuda' in str(self.device):
@@ -71,6 +90,7 @@ class AudioTagging(object):
             output_dict = self.model(audio, None)
 
         clipwise_output = output_dict['clipwise_output'].data.cpu().numpy()
+        clipwise_output = np.exp(clipwise_output) ###修正
         embedding = output_dict['embedding'].data.cpu().numpy()
 
         return clipwise_output, embedding
@@ -108,10 +128,21 @@ class SoundEventDetection(object):
                 hop_size=320, mel_bins=64, fmin=50, fmax=14000, 
                 classes_num=self.classes_num, interpolate_mode=interpolate_mode)
         else:
-            self.model = model
-        
+        	self.model = model
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model'])
+        	
+
+        #修正--------------------------
+        #model = torch.compile(model) #only available for PyTorch > 2.0
+        print("classes_num=",classes_num)
+        
+        #print([k for k in  checkpoint['model'].keys() ])
+        
+        #self.model.load_from_pretrain(checkpoint_path)
+        self.model.load_state_dict(checkpoint['model'])#修正
+
+        #--------------------------
+        
 
         # Parallel
         if 'cuda' in str(self.device):

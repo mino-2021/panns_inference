@@ -52,24 +52,28 @@ if __name__ == '__main__':
     """Example of using panns_inferece for audio tagging and sound evetn detection.
     """
     device = 'cpu' # 'cuda' | 'cpu'
-    audio_path = 'resources/R9_ZSCveAHg_7s.wav'
+    #audio_path = 'resources/R9_ZSCveAHg_7s.wav'
+    audio_path = 'resources/blues.00000.wav'
+    
     (audio, _) = librosa.core.load(audio_path, sr=32000, mono=True)
     audio = audio[None, :]  # (batch_size, segment_samples)
+    
+    checkpoint_path="CNN14_transfer_music.pth"
 
     print('------ Audio tagging ------')
-    at = AudioTagging(checkpoint_path=None, device=device)
+    at = AudioTagging(checkpoint_path=checkpoint_path, device=device)
     (clipwise_output, embedding) = at.inference(audio)
     """clipwise_output: (batch_size, classes_num), embedding: (batch_size, embedding_size)"""
 
     print_audio_tagging_result(clipwise_output[0])
 
-    print('------ Sound event detection ------')
-    sed = SoundEventDetection(
-        checkpoint_path=None, 
-        device=device, 
-        interpolate_mode='nearest', # 'nearest'
-    )
-    framewise_output = sed.inference(audio)
-    """(batch_size, time_steps, classes_num)"""
+    #print('------ Sound event detection ------')
+    #sed = SoundEventDetection(
+    #    checkpoint_path=None, 
+    #    device=device, 
+    #    interpolate_mode='nearest', # 'nearest'
+    #)
+    #framewise_output = sed.inference(audio)
+    #"""(batch_size, time_steps, classes_num)"""
 
-    plot_sound_event_detection_result(framewise_output[0])
+    #plot_sound_event_detection_result(framewise_output[0])
